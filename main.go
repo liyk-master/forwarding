@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/spf13/viper"
 	"io"
 	"net"
 	"regexp"
@@ -31,16 +32,47 @@ type GlobalData struct {
 	requestData string
 }
 
-type authState int
+type Configurations struct {
+	Server ServerConfigurations
+	Auth   AuthConfigurations
+}
 
-const (
-	stateWaitingUsername authState = iota
-	stateWaitingPassword
-	stateAuthenticated
-)
+type ServerConfigurations struct {
+	Tcp_port int
+	Udp_port int
+}
+
+type AuthConfigurations struct {
+	Username string
+	Password string
+}
+
+var configuration Configurations
+
+func init() {
+	viper.SetConfigName("config")
+	viper.AddConfigPath(".")
+	viper.AutomaticEnv()
+	viper.SetConfigType("yml")
+	if err := viper.ReadInConfig(); err != nil {
+		fmt.Printf("Error reading config file, %s", err)
+	}
+	viper.SetDefault("server.tcp_port", 8090)
+	viper.SetDefault("server.udp_port", 8091)
+	err := viper.Unmarshal(&configuration)
+	if err != nil {
+		fmt.Printf("Unable to decode into struct, %v", err)
+	}
+	fmt.Printf("reading using server:\n tcp_port=%d,udp_port=%d \n",
+		configuration.Server.Tcp_port,
+		configuration.Server.Udp_port)
+	fmt.Printf("reading auth config:\n username=%s,password=%s \n",
+		configuration.Auth.Username,
+		configuration.Auth.Password)
+}
 
 func main() {
-	tcpAddr, err := net.ResolveTCPAddr("tcp4", ":8090")
+	tcpAddr, err := net.ResolveTCPAddr("tcp4", fmt.Sprintf(":%d", configuration.Server.Tcp_port))
 	if err != nil {
 		fmt.Println("Error resolving TCP address:", err)
 		return
@@ -83,7 +115,7 @@ func handleClient(conn net.Conn, globalData *GlobalData) {
 	if userNamePre.MatchString(string(buf[:n])) {
 		userName := strings.TrimPrefix(string(buf[:n]), "username_")
 		userName = strings.ReplaceAll(userName, "\r\n", "")
-		if userName != "root" {
+		if userName != configuration.Auth.Username {
 			_, _ = conn.Write([]byte("username is not found!"))
 			conn.Close()
 			return
@@ -101,7 +133,7 @@ func handleClient(conn net.Conn, globalData *GlobalData) {
 		if passWordPre.MatchString(string(data[:n])) {
 			passWord := strings.TrimPrefix(string(data[:n]), "password_")
 			passWord = strings.ReplaceAll(passWord, "\r\n", "")
-			if passWord != "63a9f0ea7bb98050796b64" {
+			if passWord != configuration.Auth.Password {
 				_, _ = conn.Write([]byte("wrong password!"))
 				conn.Close()
 				return
@@ -140,7 +172,7 @@ func udpSendMessage(conn net.Conn, globalData *GlobalData) {
 			tcpChan <- string(data[:n])
 		}
 	}()
-	udpAddr, err := net.ResolveUDPAddr("udp4", ":8091")
+	udpAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf(":%d", configuration.Server.Udp_port))
 	if err != nil {
 		fmt.Println("Error resolving UDP address:", err)
 		return

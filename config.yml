@@ -1,0 +1,7 @@
+server:
+  tcp_port: 8090
+  udp_port: 8091
+
+auth:
+  username: root
+  password: 63a9f0ea7bb98050796b64
