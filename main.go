@@ -234,8 +234,6 @@ func udpSendMessage(conn net.Conn, globalData *GlobalData) {
 		case <-stopChan:
 			fmt.Println("tcp sending stop!")
 			return
-		default:
-
 		}
 	}
 }
